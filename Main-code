@@ -1,1 +1,43 @@
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+import time
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+#functions to open texts file
+# Parameter String from web scraping
+def openFiles(webTEXT):
+   txtFile = open("AI GOV WEB SCRAPING" , "x")
+   txtFile.write(webTEXT)
+
+
+testString = "this is a test string"
+
+# Path links to chrome driver
+PATH = "C:\Program Files\chromedriver.exe"
+
+#intiating the chrome driver
+chromeDriver = webdriver.Chrome(PATH)
+
+#opens up beta.sam.gov search page
+chromeDriver.get("https://sam.gov/search/?index=_all&page=1&sort=modifiedDate&sfm%5Bstatus%5D%5Bis_active%5D=true")
+
+time.sleep(5)
+
+#this closes the notices when entering the website: 
+#element is found through the xpath
+okButton = chromeDriver.find_element_by_xpath("/html/body/div/div[2]/div/sds-dialog-container/layout-splash-modal/div[4]/div[2]/div/button")
+
+okButton.click()
+
+
+
+keywordSearch = chromeDriver.find_element_by_xpath("//*[@id='keywordFilter']")
+
+keywordSearch.send_keys("Artificial Intelligence", Keys.RETURN)
+
+
+
+
 
