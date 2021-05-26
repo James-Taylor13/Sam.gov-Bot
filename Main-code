@@ -23,21 +23,42 @@ chromeDriver = webdriver.Chrome(PATH)
 #opens up beta.sam.gov search page
 chromeDriver.get("https://sam.gov/search/?index=_all&page=1&sort=modifiedDate&sfm%5Bstatus%5D%5Bis_active%5D=true")
 
-time.sleep(5)
+#Waits for the 'ok' element open then clicks on it
+try:
+    element = WebDriverWait(chromeDriver, 10).until(
+        EC.presence_of_element_located((By.XPATH, "/html/body/div/div[2]/div/sds-dialog-container/layout-splash-modal/div[4]/div[2]/div/button"))
+    )
 
-#this closes the notices when entering the website: 
-#element is found through the xpath
-okButton = chromeDriver.find_element_by_xpath("/html/body/div/div[2]/div/sds-dialog-container/layout-splash-modal/div[4]/div[2]/div/button")
-
-okButton.click()
+    element.click()
+except:
+    print("no button")
 
 
-
+#Searches Artifical Intellegence in Keyword box
 keywordSearch = chromeDriver.find_element_by_xpath("//*[@id='keywordFilter']")
 
 keywordSearch.send_keys("Artificial Intelligence", Keys.RETURN)
 
 
+#this will wait until the article link pops-up and click
+try:
+    element = WebDriverWait(chromeDriver, 10).until(
+        EC.presence_of_element_located((By.XPATH, "/html/body/sam-frontend-search-root/section/sam-frontend-search-home/div/div/div[2]/search-list-layout/div[2]/div/div/sds-search-result-list/div[1]/div/app-opportunity-result/div/div[1]/div[1]/div/h3/a"))
+    )
 
+    element.click()
+except:
+    print("no button")
+
+#Waits for the 'ok' element open then clicks on it
+
+try:
+    element = WebDriverWait(chromeDriver, 10).until(
+        EC.presence_of_element_located((By.XPATH, "/html/body/div/div[2]/div/sds-dialog-container/layout-splash-modal/div[4]/div[2]/div/button"))
+    )
+
+    element.click()
+except:
+    print("no button")
 
 
