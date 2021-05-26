@@ -1,0 +1,13 @@
+import slack
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+#Denoting where the path for our environment variable file is and then loading it in
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
+
+#Load variable from .env and set as our token
+client = slack.WebClient(token=os.environ['slack_token'])
+
+client.chat_postMessage(channel='#bot_test', text='Hello World!')
