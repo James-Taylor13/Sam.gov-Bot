@@ -1,18 +1,96 @@
+
+import time
+import slack
+import os
+import os.path
+from os import path
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
-import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from pathlib import Path
+from dotenv import load_dotenv
 
-#functions to open texts file
-# Parameter String from web scraping
-def openFiles(webTEXT):
-   txtFile = open("AI GOV WEB SCRAPING" , "x")
-   txtFile.write(webTEXT)
+#Denoting where the path for our environment variable file is and then loading it in
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
+
+#Load variable from .env and set as our token
+client = slack.WebClient(token=os.environ['SLACK_TOKEN'])
 
 
-testString = "this is a test string"
+
+#Ensures if files exists if not it will open: it is used to log searchs
+def openFiles():
+    if path.exists("AI GOV WEB SCRAPING"):
+        print("File AI GOV WEB SCRAPING exsist")
+    else:
+        txtFile = open("AI GOV WEB SCRAPING" , "w")
+        txtFile.close
+   
+#This is functions write search results to file
+def writeFile(title, department, publishDate, description):
+    txtFile = open("AI GOV WEB SCRAPING" , "a")
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+
+
+    txtFile.write("Search Start Time: " + dt_string + "\n")
+    txtFile.write("Title: " + title + "\n")
+    txtFile.write("Department: " + department + "\n")
+    txtFile.write("Orginal Publish Date: " + publishDate + "\n")
+    txtFile.write("Description: " + description + "\n")
+    txtFile.write("\n")
+    txtFile.close()
+
+#This functions will write results to slack bot
+def writeSlackBot(title, department, publishDate, description):
+    
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+
+    searchTime = ("Search Start Time: " + dt_string + "\n")
+    articleTitle = ("Title: " + title + "\n")
+    departmentName = ("Department: " + department + "\n")
+    pubDate = (publishDate + "\n")
+    descriptionTest = ("Description: " + description + "\n")
+    client.chat_postMessage(channel='#bot_test', text= searchTime + "\n" + articleTitle + "\n" + departmentName + "\n" + pubDate  + "\n" + descriptionTest)
+
+    
+#This function will take results and send them to the write functions if the results are new
+def importData(title, department, publishDate, description):
+    titleSame = sameTitle(title)
+
+    print("TEST BOOLEAN TITLE SAME:")
+    print(titleSame)
+   
+    if titleSame:
+        print("No new information")
+    else:
+        writeFile(title, department, publishDate, description)
+        writeSlackBot(title, department, publishDate, description)
+
+def sameTitle(title):
+    sameTitle = True
+    txtFile = open("AI GOV WEB SCRAPING" , "r")
+    searchTime = txtFile.readline()
+    oldTitle = txtFile.readline()
+
+    newTitle = "Title: " + title
+
+    print("Test: " + oldTitle)
+    print("Test: " + newTitle)
+
+    if oldTitle == newTitle:
+        sameTitle = True
+    else:
+        sameTitle = False
+
+    return sameTitle
+
+   
 
 # Path links to chrome driver
 PATH = "C:\Program Files\chromedriver.exe"
@@ -21,7 +99,9 @@ PATH = "C:\Program Files\chromedriver.exe"
 chromeDriver = webdriver.Chrome(PATH)
 
 #opens up beta.sam.gov search page
-chromeDriver.get("https://sam.gov/search/?index=_all&page=1&sort=modifiedDate&sfm%5Bstatus%5D%5Bis_active%5D=true")
+chromeDriver.get("https://sam.gov/search/")
+
+time.sleep(2)
 
 #Waits for the 'ok' element open then clicks on it
 try:
@@ -34,19 +114,20 @@ except:
     print("no button")
 
 
-#Searches Artifical Intellegence in Keyword box
+#Searches "Artifical Intellegence" in Keyword box
 keywordSearch = chromeDriver.find_element_by_xpath("//*[@id='keywordFilter']")
 
 keywordSearch.send_keys("Artificial Intelligence", Keys.RETURN)
 
 
-#this will wait until the article link pops-up and click
+#this will wait until the article link pops-up and click on link
 try:
     element = WebDriverWait(chromeDriver, 10).until(
         EC.presence_of_element_located((By.XPATH, "/html/body/sam-frontend-search-root/section/sam-frontend-search-home/div/div/div[2]/search-list-layout/div[2]/div/div/sds-search-result-list/div[1]/div/app-opportunity-result/div/div[1]/div[1]/div/h3/a"))
     )
 
     element.click()
+    
 except:
     print("no button")
 
@@ -60,5 +141,30 @@ try:
     element.click()
 except:
     print("no button")
+
+
+time.sleep(5)
+
+#pulls all text element from the article page
+title = chromeDriver.find_element_by_tag_name("h1")
+
+deparment = chromeDriver.find_element_by_xpath("/html/body/app/main/ng-component/page/div/div/div[3]/div[2]/div[1]/section/div[2]/div[4]/div/div/div[3]/div/div[2]")
+
+orginalPub = chromeDriver.find_element_by_css_selector('#general-original-published-date')
+
+description = chromeDriver.find_element_by_css_selector("#description > div.ng-star-inserted > p:nth-child(1)")
+
+
+openFiles()
+
+importData(title.text, deparment.text, orginalPub.text, description.text)
+
+
+
+chromeDriver.quit()
+
+
+
+
 
 
