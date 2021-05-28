@@ -1,9 +1,11 @@
 
 import time
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 import slack
 import os
 import os.path
-from os import path
+from os import getppid, path
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -12,6 +14,26 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from pathlib import Path
 from dotenv import load_dotenv
+
+
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+
+
+#Setup for Google Sheets and Drive API
+scope = ['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive']
+
+creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
+
+googleClient = gspread.authorize(creds)
+
+
+sheetID = "12bT-9A53WKMv5g8cTfn8MKNFCb7ExNW1Tp3fjYW-7ZA/edit#gid=0"
+
+googleSheet = googleClient.open_by_url("https://docs.google.com/spreadsheets/d/12bT-9A53WKMv5g8cTfn8MKNFCb7ExNW1Tp3fjYW-7ZA/edit#gid=0").sheet1
+
 
 #Denoting where the path for our environment variable file is and then loading it in
 env_path = Path('.') / '.env'
@@ -24,15 +46,15 @@ client = slack.WebClient(token=os.environ['SLACK_TOKEN'])
 
 #Ensures if files exists if not it will open: it is used to log searchs
 def openFiles():
-    if path.exists("AI GOV WEB SCRAPING"):
-        print("File AI GOV WEB SCRAPING exsist")
+    if path.exists("SAM_GOV_AI_SEARCH_RESULTS"):
+        print("File SAM_GOV_AI_SEARCH_RESULTS exist")
     else:
-        txtFile = open("AI GOV WEB SCRAPING" , "w")
+        txtFile = open("SAM_GOV_AI_SEARCH_RESULTS" , "w")
         txtFile.close
    
 #This is functions write search results to file
-def writeFile(title, department, publishDate, description):
-    txtFile = open("AI GOV WEB SCRAPING" , "a")
+def writeFile(title, department, publishDate, description, url):
+    txtFile = open("SAM_GOV_AI_SEARCH_RESULTS" , "a")
     now = datetime.now()
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
 
@@ -42,11 +64,12 @@ def writeFile(title, department, publishDate, description):
     txtFile.write("Department: " + department + "\n")
     txtFile.write("Orginal Publish Date: " + publishDate + "\n")
     txtFile.write("Description: " + description + "\n")
+    txtFile.write("URL: " + url + "\n")
     txtFile.write("\n")
     txtFile.close()
 
 #This functions will write results to slack bot
-def writeSlackBot(title, department, publishDate, description):
+def writeSlackBot(title, department, publishDate, description, url):
     
     now = datetime.now()
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
@@ -56,29 +79,47 @@ def writeSlackBot(title, department, publishDate, description):
     departmentName = ("Department: " + department + "\n")
     pubDate = (publishDate + "\n")
     descriptionTest = ("Description: " + description + "\n")
-    client.chat_postMessage(channel='#bot_test', text= searchTime + "\n" + articleTitle + "\n" + departmentName + "\n" + pubDate  + "\n" + descriptionTest)
+    moreInfo = ("URL to Article: " + url +"\n" )
+    client.chat_postMessage(channel='#sales_updates', text= searchTime + "\n" + articleTitle + "\n" + departmentName + "\n" + pubDate  + "\n" + descriptionTest + "\n" + moreInfo + "\n" + "You can find previous search results here: https://docs.google.com/spreadsheets/d/12bT-9A53WKMv5g8cTfn8MKNFCb7ExNW1Tp3fjYW-7ZA/edit#gid=0'\n" )
+
+#This functions write to google sheets 
+def writeSheets(title, department, publishDate, description, url):
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+    
+    insertRow = [dt_string, title, department, publishDate, description, url]
+    googleSheet.append_row(insertRow, value_input_option='RAW')
+    
+  
+
 
     
 #This function will take results and send them to the write functions if the results are new
-def importData(title, department, publishDate, description):
+def importData(title, department, publishDate, description, url):
     titleSame = sameTitle(title)
 
     print("TEST BOOLEAN TITLE SAME:")
     print(titleSame)
+
    
     if titleSame:
         print("No new information")
+        client.chat_postMessage(channel='#sales_updates', text= 'There are no new postings for "Artificial Intelligence" on SAM.gov at the moment. \n We will keep you updated for the next post! You can find previous search results here: https://docs.google.com/spreadsheets/d/12bT-9A53WKMv5g8cTfn8MKNFCb7ExNW1Tp3fjYW-7ZA/edit#gid=0' )
     else:
-        writeFile(title, department, publishDate, description)
-        writeSlackBot(title, department, publishDate, description)
+        writeFile(title, department, publishDate, description, url)
+        writeSheets(title, department, publishDate, description, url)
+        writeSlackBot(title, department, publishDate, description, url)
 
+#Function is to verify there is a new article to report
 def sameTitle(title):
     sameTitle = True
-    txtFile = open("AI GOV WEB SCRAPING" , "r")
+    txtFile = open("SAM_GOV_AI_SEARCH_RESULTS" , "r")
+
+    #search time is here to bypass reading the first line of the file
     searchTime = txtFile.readline()
     oldTitle = txtFile.readline()
 
-    newTitle = "Title: " + title
+    newTitle = "Title: " + title + "\n"
 
     print("Test: " + oldTitle)
     print("Test: " + newTitle)
@@ -91,77 +132,83 @@ def sameTitle(title):
     return sameTitle
 
    
+def main():
+    # Path links to chrome driver
+    PATH = "C:\Program Files\chromedriver.exe"
 
-# Path links to chrome driver
-PATH = "C:\Program Files\chromedriver.exe"
+    #intiating the chrome driver
+    chromeDriver = webdriver.Chrome(PATH)
 
-#intiating the chrome driver
-chromeDriver = webdriver.Chrome(PATH)
+    #opens up beta.sam.gov search page
+    chromeDriver.get("https://sam.gov/search/")
 
-#opens up beta.sam.gov search page
-chromeDriver.get("https://sam.gov/search/")
+    time.sleep(2)
 
-time.sleep(2)
+    #Waits for the 'ok' element open then clicks on it
+    try:
+        element = WebDriverWait(chromeDriver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "/html/body/div/div[2]/div/sds-dialog-container/layout-splash-modal/div[4]/div[2]/div/button"))
+        )
 
-#Waits for the 'ok' element open then clicks on it
-try:
-    element = WebDriverWait(chromeDriver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "/html/body/div/div[2]/div/sds-dialog-container/layout-splash-modal/div[4]/div[2]/div/button"))
-    )
-
-    element.click()
-except:
-    print("no button")
-
-
-#Searches "Artifical Intellegence" in Keyword box
-keywordSearch = chromeDriver.find_element_by_xpath("//*[@id='keywordFilter']")
-
-keywordSearch.send_keys("Artificial Intelligence", Keys.RETURN)
+        element.click()
+    except:
+        print("no button")
 
 
-#this will wait until the article link pops-up and click on link
-try:
-    element = WebDriverWait(chromeDriver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "/html/body/sam-frontend-search-root/section/sam-frontend-search-home/div/div/div[2]/search-list-layout/div[2]/div/div/sds-search-result-list/div[1]/div/app-opportunity-result/div/div[1]/div[1]/div/h3/a"))
-    )
+    #Searches "Artifical Intellegence" in Keyword box
+    keywordSearch = chromeDriver.find_element_by_xpath("//*[@id='keywordFilter']")
 
-    element.click()
-    
-except:
-    print("no button")
-
-#Waits for the 'ok' element open then clicks on it
-
-try:
-    element = WebDriverWait(chromeDriver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "/html/body/div/div[2]/div/sds-dialog-container/layout-splash-modal/div[4]/div[2]/div/button"))
-    )
-
-    element.click()
-except:
-    print("no button")
+    keywordSearch.send_keys("Artificial Intelligence", Keys.RETURN)
 
 
-time.sleep(5)
+    #this will wait until the article link pops-up and click on link
+    try:
+        element = WebDriverWait(chromeDriver, 10).until(
+            EC.presence_of_element_located((By.XPATH, '//*[@id="main-container"]/sam-frontend-search-home/div/div/div[2]/search-list-layout/div[2]/div/div/sds-search-result-list/div[1]/div/app-opportunity-result/div/div[1]/div[1]/div/h3/a'))
+        )
 
-#pulls all text element from the article page
-title = chromeDriver.find_element_by_tag_name("h1")
+        element.click()
+        
+    except:
+        print("no button")
 
-deparment = chromeDriver.find_element_by_xpath("/html/body/app/main/ng-component/page/div/div/div[3]/div[2]/div[1]/section/div[2]/div[4]/div/div/div[3]/div/div[2]")
+    #Waits for the 'ok' element open then clicks on it
 
-orginalPub = chromeDriver.find_element_by_css_selector('#general-original-published-date')
+    try:
+        element = WebDriverWait(chromeDriver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "/html/body/div/div[2]/div/sds-dialog-container/layout-splash-modal/div[4]/div[2]/div/button"))
+        )
 
-description = chromeDriver.find_element_by_css_selector("#description > div.ng-star-inserted > p:nth-child(1)")
+        element.click()
+    except:
+        print("no button")
 
 
-openFiles()
+    time.sleep(5)
 
-importData(title.text, deparment.text, orginalPub.text, description.text)
+    #pulls all text element from the article page
+    articleUrl = chromeDriver.current_url
+
+    title = chromeDriver.find_element_by_tag_name("h1")
+
+    deparment = chromeDriver.find_element_by_xpath("/html/body/app/main/ng-component/page/div/div/div[3]/div[2]/div[1]/section/div[2]/div[4]/div/div/div[3]/div/div[2]")
+
+    orginalPub = chromeDriver.find_element_by_css_selector('#general-original-published-date')
+
+    description = chromeDriver.find_element_by_css_selector("#description > div.ng-star-inserted > p:nth-child(1)")
+
+
+    openFiles()
+
+    importData(title.text, deparment.text, orginalPub.text, description.text, articleUrl)
 
 
 
-chromeDriver.quit()
+    chromeDriver.quit()
+
+if __name__ == "__main__":
+    main()
+
 
 
 
