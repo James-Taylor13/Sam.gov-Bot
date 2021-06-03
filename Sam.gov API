@@ -1,1 +1,73 @@
 
+import time
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import slack
+import os
+import os.path
+import urllib.request, json 
+import json
+from os import getppid, path
+from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from pathlib import Path
+from dotenv import load_dotenv
+from urllib.request import urlopen
+
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+
+
+#Setup for Google Sheets and Drive API
+scope = ['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive']
+
+creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
+
+googleClient = gspread.authorize(creds)
+
+
+sheetID = "12bT-9A53WKMv5g8cTfn8MKNFCb7ExNW1Tp3fjYW-7ZA/edit#gid=0"
+
+googleSheet = googleClient.open_by_url("https://docs.google.com/spreadsheets/d/12bT-9A53WKMv5g8cTfn8MKNFCb7ExNW1Tp3fjYW-7ZA/edit#gid=0").sheet1
+
+
+#Denoting where the path for our environment variable file is and then loading it in
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
+
+#Load variable from .env and set as our token
+client = slack.WebClient(token=os.environ['SLACK_TOKEN'])
+
+#sam gov api url
+
+samUrl = "https://api.sam.gov/prod/opportunities/v1/search?limit=100&api_key=7T7nOP04bFAqPWSRhvcRCEQ5sZJ0G99BUOBRTCJw&title=artificial_intelligence&postedFrom=05/10/2020&postedTo=05/9/2021"
+
+#samDataJson = urllib.request.urlopen(samUrl)
+
+#data = json.loads(samDataJson.read().decode())
+
+
+#with open('Sam gov data', 'w') as f:
+   # samJsonFile = json.dumps(data)
+    #f.write(samJsonFile)
+   # f.close
+
+with open("sam gov data.json") as f:
+    data = json.load(f)
+
+for opportunitiesData in data['opportunitiesData']:
+    info = ("Title: " + opportunitiesData['title'] + " \n" + "Department: " +  opportunitiesData['department'] + " \n" + "Office: " +  opportunitiesData['office'] +  " \n" + "postedDate: " +  opportunitiesData['postedDate'] +  " \n")
+    client.chat_postMessage(channel='#bot_test', text= info )
+   
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+    
+    insertRow = [dt_string, opportunitiesData['title'], opportunitiesData['department'], opportunitiesData['postedDate']]
+    googleSheet.append_row(insertRow, value_input_option='RAW')
+    
